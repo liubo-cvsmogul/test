@@ -1,39 +1,40 @@
+全都不懂怎么办-liubo到此一游
 目录
 
 🍒查看docker网络
 
-🍒bridge网络
+🍒桥接网络
 
-🍒none网络
+🍒无网络
 
-🍒host网络
+🍒主机网络
 
 🍒自定义容器网络
 
     🦐博客主页：大虾好吃吗的博客
 
-    🦐专栏地址：云原生专栏
+    🦐专栏地址：云离婚专栏
 
-        根据前面的学习，已经对docker有了一些简单的概念。这里在啰嗦一句，容器是一个独立的环境，可以理解为一个小型的linux系统（但不要把它当真正的系统），而docker的网络分为三种分别为bridge、host、none。
+        根据前面的学习，已经对docker有了一些简单的概念。这里啰嗦一句，容器是一个独立的环境，可以理解为一个小型的linux系统（但不要把它当真正的系统），而docker的网络划分分别为bridge、host、none。
 
-bridge：默认网络，可以ping通外网，但是外网无法访问内网。
+bridge：默认网络，可以ping通外网，但外网无法访问内网。
 
 host：跟本地主机host使用的同一个网络。
 
-none：没有网络，挂载网络下的容器除了lo，没有其他网卡。
+none：没有网络，挂载网络下的容器除了lo，没有其他中断。
 
 查看docker网络
 docker安装时会自动在网络中创建三个网络，通过下面命令查看，默认网络是bridge。
 
-[root@doc11 ~]# docker network ls
-NETWORK ID     NAME      DRIVER    SCOPE
-7d96a5075951   bridge    bridge    local
-32cea9efbc61   host      host      local
-4341e5f3526d   none      null      local
-bridge网络
-        docker安装的时候会创建一个名为docker0的linux bridge。如果不指定network，创建容器默认都挂在docker0上。
+[root@doc11 ~]# docker 网络 ls
+网络 ID 名称 驱动程序范围
+7d96a5075951 桥桥本地
+32cea9efbc61主机主机本地
+4341e5f3526d 无 空 本地
+桥接网络
+        安装docker的时候会创建一个名为docker0的linux网桥。如果不指定网络，创建容器默认都挂在docker0上。
 
-[root@doc11 ~]# brctl show
+[root@doc11 ~]# brctl 显示
 bridge name     bridge id               STP enabled     interfaces
 docker0         8000.0242c661a50d       no
         当docker0上没有任何网络设备，我们创建一个容器看看有什么变化。这里以httpd为例，没有镜像的话使用docker pull httpd下载一个。
