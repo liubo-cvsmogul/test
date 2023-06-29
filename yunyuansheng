@@ -1,0 +1,224 @@
+目录
+
+🍒查看docker网络
+
+🍒bridge网络
+
+🍒none网络
+
+🍒host网络
+
+🍒自定义容器网络
+
+    🦐博客主页：大虾好吃吗的博客
+
+    🦐专栏地址：云原生专栏
+
+        根据前面的学习，已经对docker有了一些简单的概念。这里在啰嗦一句，容器是一个独立的环境，可以理解为一个小型的linux系统（但不要把它当真正的系统），而docker的网络分为三种分别为bridge、host、none。
+
+bridge：默认网络，可以ping通外网，但是外网无法访问内网。
+
+host：跟本地主机host使用的同一个网络。
+
+none：没有网络，挂载网络下的容器除了lo，没有其他网卡。
+
+查看docker网络
+docker安装时会自动在网络中创建三个网络，通过下面命令查看，默认网络是bridge。
+
+[root@doc11 ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+7d96a5075951   bridge    bridge    local
+32cea9efbc61   host      host      local
+4341e5f3526d   none      null      local
+bridge网络
+        docker安装的时候会创建一个名为docker0的linux bridge。如果不指定network，创建容器默认都挂在docker0上。
+
+[root@doc11 ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.0242c661a50d       no
+        当docker0上没有任何网络设备，我们创建一个容器看看有什么变化。这里以httpd为例，没有镜像的话使用docker pull httpd下载一个。
+
+[root@doc11 ~]# docker run -d httpd
+dbd6e608e12332df931f8b010e8ea0c2404856d06b24c500bbf1bd551e590a70
+[root@doc11 ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.0242c661a50d       no              vethd3c5074
+        通过上面的命令可以看到，一个新的网络接口vethd3c5074被挂到了docker0上，vethd3c5074就是新创建容器的虚拟网卡。
+
+none网络
+        我们看一下none网络，它就是一个完全隔离的网络。对于安全性要求高且不需要联网的应用可以使用none网络，比如某个容器的唯一用途就是生成随机密码，就可以放到none网络中避免密码被窃取。
+
+[root@doc11 ~]# docker run -it --network=none busybox
+/ # ifconfig 
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+​
+/ # 
+host网络
+        连接到host网络的容器共享docker host的网络，容器的网络配置与host完全一样。容器中可以看到host的所有网卡，hostname也是host的。
+
+[root@doc11 ~]# docker run -it --network=host busybox
+/ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast qlen 1000
+    link/ether 00:0c:29:74:01:52 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.8.11/24 brd 192.168.8.255 scope global noprefixroute ens33
+       valid_lft forever preferred_lft forever
+    inet6 fe80::62ba:6b5b:2f04:4aef/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue 
+    link/ether 02:42:c6:61:a5:0d brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:c6ff:fe61:a50d/64 scope link 
+       valid_lft forever preferred_lft forever
+/ # hostname
+doc11
+/ # 
+
+那么host网络的使用场景是什么呢？
+
+        直接使用host的网络最大的好处就是性能，如果容器对网络传输效率有较高的要求，可以选择host网络。当然也是有一些缺点的，比如要考虑端口冲突问题，如果host上已经使用的端口，容器内就不能使用了。
+
+自定义容器网络
+        除了上面三种网络，用户也可以根据也无需求创建user-defined网络。docker提供了三种user-defined网络驱动 ：bridge,overlay和macvlan。overlay和macvlan用于创建跨主机网络。
+
+我们通过bridge驱动创建类似bridge网络。
+
+[root@doc11 ~]# docker network create --driver bridge my_net
+ce55c3cfefb5138572dcf58a8a1a81805415543b69893f2899ba37f18c2641fb
+[root@doc11 ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br-ce55c3cfefb5         8000.0242c21d4aba       no
+docker0         8000.0242c661a50d       no
+        新增一个网桥br-ce55c3cfefb5，这里br-ce55c3cfefb5正好新建bridge网络my_net的短id。下面命令查看my_net的配置信息。
+
+[root@doc11 ~]# docker network inspect my_net
+[
+    {
+        "Name": "my_net",
+        "Id": "ce55c3cfefb5138572dcf58a8a1a81805415543b69893f2899ba37f18c2641fb",
+        "Created": "2023-06-19T02:46:15.02356553-04:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.18.0.0/16",
+                    "Gateway": "172.18.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {},
+        "Labels": {}
+    }
+]
+
+上述172.18.0.0/16是docker自动分配的IP网段，我们可以自己指定网段。
+
+只需要创建的时候指定--subnet和--gateway参数
+
+[root@doc11 ~]# docker network create --driver bridge --subnet 172.66.66.0/24 --gateway 172.66.66.1 my_net2
+0f463941f2aa09619d41ccde1adb96a04af9228851c7c6eea5ddd0c24b54700b
+[root@doc11 ~]# docker network inspect my_net2
+[
+    {
+        "Name": "my_net2",
+        "Id": "0f463941f2aa09619d41ccde1adb96a04af9228851c7c6eea5ddd0c24b54700b",
+        "Created": "2023-06-19T02:50:57.224944386-04:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.66.66.0/24",
+                    "Gateway": "172.66.66.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {},
+        "Labels": {}
+    }
+]
+
+        上面新建的bridge网络my_net2，网段为172.66.66.0/24，网关为172.66.66.1，网关在my_net2对应的网桥br-0f463941f2aa上面。
+
+[root@doc11 ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br-0f463941f2aa         8000.02426b2b8eb7       no
+br-ce55c3cfefb5         8000.0242c21d4aba       no
+docker0         8000.0242c661a50d       no
+[root@doc11 ~]# ifconfig br-0f463941f2aa
+br-0f463941f2aa: flags=4099<UP,BROADCAST,MULTICAST>  mtu 1500
+        inet 172.66.66.1  netmask 255.255.255.0  broadcast 172.66.66.255
+        ether 02:42:6b:2b:8e:b7  txqueuelen 0  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+        我们来看看网络怎么使用吧，大概可以猜到想到，使用方法和上面的相同，使用--network参数指定网络。（因为使用的虚拟机环境恢复快照了，重新下载了一下busybox）
+
+[root@doc11 ~]# docker run -it --network=my_net2 busybox
+Unable to find image 'busybox:latest' locally
+latest: Pulling from library/busybox
+5cc84ad355aa: Pull complete 
+Digest: sha256:5acba83a746c7608ed544dc1533b87c737a0b0fb730301639a0179f9344b1678
+Status: Downloaded newer image for busybox:latest
+/ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+6: eth0@if7: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1500 qdisc noqueue 
+    link/ether 02:42:ac:42:42:02 brd ff:ff:ff:ff:ff:ff
+    inet 172.66.66.2/24 brd 172.66.66.255 scope global eth0
+       valid_lft forever preferred_lft forever
+/ # 
+可以看到上面的网络是172.66.66.2/24，也可以通过--ip指定一个静态ip。
+
+[root@doc11 ~]# docker run -it --network=my_net2 --ip 172.66.66.66 busybox
+/ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+8: eth0@if9: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1500 qdisc noqueue 
+    link/ether 02:42:ac:42:42:42 brd ff:ff:ff:ff:ff:ff
+    inet 172.66.66.66/24 brd 172.66.66.255 scope global eth0
+       valid_lft forever preferred_lft forever
+注：只有使用--subnet创建的网络才能指定静态ip。
+————————————————
+版权声明：本文为CSDN博主「大虾好吃吗」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/qq_61116007/article/details/131287350
